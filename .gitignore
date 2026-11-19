@@ -15,3 +15,10 @@ target/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Runtime data & logs
+*.log
+downloads/*
+!downloads/.gitkeep
+shared/*
+!shared/.gitkeep
