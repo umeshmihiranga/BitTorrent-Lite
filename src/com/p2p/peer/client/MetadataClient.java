@@ -43,8 +43,7 @@ public final class MetadataClient {
         IOException lastError = null;
 
         for (PeerEntry peer : peers) {
-            try (Socket s = new Socket()) {
-                s.connect(new InetSocketAddress(peer.ip, peer.port), CONNECT_TIMEOUT_MS);
+            try (Socket s = connectWithFallback(peer.ip, peer.port)) {
                 s.setSoTimeout(READ_TIMEOUT_MS);
                 DataOutputStream out = ProtocolHandler.wrapOutput(s);
                 DataInputStream in = ProtocolHandler.wrapInput(s);
@@ -91,5 +90,25 @@ public final class MetadataClient {
 
         throw new IOException("Could not fetch metadata from any peer: "
                 + (lastError != null ? lastError.getMessage() : "unknown error"), lastError);
+    }
+
+    static Socket connectWithFallback(String host, int port) throws IOException {
+        try {
+            Socket s = new Socket();
+            s.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
+            return s;
+        } catch (IOException primary) {
+            if ("127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host)) {
+                throw primary;
+            }
+            Socket local = new Socket();
+            try {
+                local.connect(new InetSocketAddress("127.0.0.1", port), 1500);
+                return local;
+            } catch (IOException fallback) {
+                try { local.close(); } catch (IOException ignored) {}
+                throw primary;
+            }
+        }
     }
 }

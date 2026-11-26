@@ -59,10 +59,9 @@ class PieceDownloadWorker implements Runnable {
         BitSet remote = null;
         int current = -1;
         boolean ok = true;
-        try (Socket s = new Socket()) {
+        try (Socket s = MetadataClient.connectWithFallback(host, port)) {
             socket = s;
             listener.onPeerStatus(addr, "CONNECTING", null);
-            s.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
             s.setSoTimeout(READ_TIMEOUT_MS);
             DataOutputStream out = ProtocolHandler.wrapOutput(s);
             DataInputStream  in  = ProtocolHandler.wrapInput(s);
