@@ -35,10 +35,16 @@ public class PeerUploadHandler implements Runnable {
     private final PieceStorage storage;
     private final String peerId;
     private final Socket socket;
+    private final UploadListener listener;
     private final ProtocolHandler protocol = new ProtocolHandler();
     private volatile boolean closed;
 
     public PeerUploadHandler(PieceStorage storage, String peerId, Socket socket) {
+        this(storage, peerId, socket, null);
+    }
+
+    public PeerUploadHandler(PieceStorage storage, String peerId, Socket socket,
+                             UploadListener listener) {
         if (storage == null) {
             throw new IllegalArgumentException("PieceStorage must not be null");
         }
@@ -48,6 +54,7 @@ public class PeerUploadHandler implements Runnable {
         this.storage = storage;
         this.peerId = peerId == null ? "peer-seeder" : peerId;
         this.socket = socket;
+        this.listener = listener != null ? listener : new UploadListener() {};
     }
 
     @Override
@@ -81,6 +88,7 @@ public class PeerUploadHandler implements Runnable {
             System.err.println("[UPLOAD] Unexpected error with " + remote + ": "
                     + e.getClass().getSimpleName() + ": " + e.getMessage());
         } finally {
+            listener.onPeerDisconnected(remote);
             close();
         }
     }
@@ -142,6 +150,8 @@ public class PeerUploadHandler implements Runnable {
 
         System.out.println("[UPLOAD] Handshake accepted: " + handshake.peerId
                 + " from " + remote);
+        listener.onPeerConnected(remote, handshake.peerId);
+        listener.onUploadLog("[TCP] HANDSHAKE + BITFIELD sent to " + remote + " (" + handshake.peerId + ")");
         return localHash;
     }
 
@@ -160,9 +170,14 @@ public class PeerUploadHandler implements Runnable {
                 continue;
             }
 
+            if (message.getType() == MessageType.GET_METADATA) {
+                handleGetMetadata(message, out, fileHash, remote);
+                continue;
+            }
+
             if (message.getType() != MessageType.REQUEST_PIECE) {
                 sendError(out, ERROR_UNKNOWN_MESSAGE,
-                        "Only REQUEST_PIECE is accepted after handshake");
+                        "Only REQUEST_PIECE or GET_METADATA is accepted after handshake");
                 continue;
             }
 
@@ -225,6 +240,10 @@ public class PeerUploadHandler implements Runnable {
                 out.flush();
                 System.out.println("[UPLOAD] Sent piece #" + request.pieceIndex
                         + " (" + piece.length + " bytes) to " + remote);
+                listener.onBytesUploaded(piece.length);
+                listener.onPieceServed(request.pieceIndex, remote, piece.length);
+                listener.onUploadLog("[TCP] PIECE_DATA #" + request.pieceIndex
+                        + " (" + piece.length + " B) sent to " + remote);
             } catch (IOException e) {
                 System.err.println("[UPLOAD] Transmission failed for piece #"
                         + request.pieceIndex + " to " + remote
@@ -237,6 +256,32 @@ public class PeerUploadHandler implements Runnable {
                 break;
             }
         }
+    }
+
+    private void handleGetMetadata(Message message, DataOutputStream out,
+                                   String fileHash, String remote)
+            throws IOException, ProtocolException {
+        String requestedHash;
+        try {
+            requestedHash = MessageSerializer.parseGetMetadata(message.getPayload());
+        } catch (ProtocolException e) {
+            sendError(out, ERROR_INVALID_FILE, "Malformed GET_METADATA payload");
+            return;
+        }
+        if (!fileHash.equals(requestedHash)) {
+            sendError(out, ERROR_INVALID_FILE, "Requested file hash is unavailable");
+            return;
+        }
+        var meta = storage.getMetadata();
+        java.util.List<String> hashes = new java.util.ArrayList<>(meta.pieceCount());
+        for (int i = 0; i < meta.pieceCount(); i++) {
+            hashes.add(meta.pieceHash(i));
+        }
+        protocol.sendMessage(out, MessageSerializer.createMetadataResponse(
+                meta.getFileName(), meta.getFileSize(), meta.getPieceSize(),
+                meta.getMasterHash(), hashes));
+        out.flush();
+        listener.onUploadLog("[TCP] METADATA_RESPONSE sent to " + remote);
     }
 
     private byte[] toBitfieldBytes() {

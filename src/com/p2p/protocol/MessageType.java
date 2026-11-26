@@ -31,6 +31,8 @@ public enum MessageType {
     BITFIELD            ((byte) 0x11, "Peer↔Peer: owned-pieces bitmask"),
     REQUEST_PIECE       ((byte) 0x12, "Leecher→Seeder: request a chunk"),
     PIECE_DATA          ((byte) 0x13, "Seeder→Leecher: deliver chunk bytes"),
+    GET_METADATA        ((byte) 0x14, "Leecher→Seeder: request .p2pmeta details"),
+    METADATA_RESPONSE   ((byte) 0x15, "Seeder→Leecher: deliver .p2pmeta details"),
 
     // ── UDP Signaling Commands ───────────────────────────────────
     UDP_HEARTBEAT       ((byte) 0x20, "Peer→Tracker (UDP): keep-alive ping"),

@@ -49,12 +49,27 @@ public class PeerServer {
                 InetAddress.getLoopbackAddress(), storage, peerId);
     }
 
+    public static PeerServer forLocalhost(int listenPort,
+                                          PieceStorage storage,
+                                          String peerId,
+                                          UploadListener listener) {
+        return new PeerServer(listenPort,
+                InetAddress.getLoopbackAddress(), storage, peerId, listener);
+    }
+
     public static PeerServer forLan(int listenPort,
                                     PieceStorage storage,
                                     String peerId) {
+        return forLan(listenPort, storage, peerId, null);
+    }
+
+    public static PeerServer forLan(int listenPort,
+                                    PieceStorage storage,
+                                    String peerId,
+                                    UploadListener listener) {
         try {
             return new PeerServer(listenPort,
-                    InetAddress.getByName("0.0.0.0"), storage, peerId);
+                    InetAddress.getByName("0.0.0.0"), storage, peerId, listener);
         } catch (IOException e) {
             throw new IllegalArgumentException(
                     "Could not configure wildcard bind address", e);
@@ -63,6 +78,12 @@ public class PeerServer {
 
     public PeerServer(int listenPort, InetAddress bindAddress,
                       PieceStorage storage, String peerId) {
+        this(listenPort, bindAddress, storage, peerId, null);
+    }
+
+    public PeerServer(int listenPort, InetAddress bindAddress,
+                      PieceStorage storage, String peerId,
+                      UploadListener listener) {
         if (storage == null) {
             throw new IllegalArgumentException("PieceStorage must not be null");
         }
@@ -76,7 +97,7 @@ public class PeerServer {
         this.configuredPort = listenPort;
         this.bindAddress = bindAddress;
         this.peerId = peerId == null ? "peer-seeder" : peerId;
-        this.uploadManager = new UploadManager(storage, this.peerId);
+        this.uploadManager = new UploadManager(storage, this.peerId, listener);
     }
 
     public PeerServer(int listenPort, InetAddress bindAddress,

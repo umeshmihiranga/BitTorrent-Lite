@@ -126,6 +126,9 @@ public class TrackerServer {
             return;
         }
 
+        System.out.println("[TRACKER] Listening on TCP port " + TCP_PORT
+                + " and UDP port " + UDP_PORT);
+
         while (!tcpSocket.isClosed()) {
             try {
                 Socket peerSocket = tcpSocket.accept();

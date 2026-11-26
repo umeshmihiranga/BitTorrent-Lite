@@ -26,6 +26,7 @@ public class UploadManager {
 
     private final PieceStorage storage;
     private final String peerId;
+    private final UploadListener listener;
     private final ExecutorService executor;
     private final AtomicInteger activeConnections = new AtomicInteger();
     private final AtomicInteger rejectedConnections = new AtomicInteger();
@@ -34,11 +35,21 @@ public class UploadManager {
     private volatile boolean shutdown;
 
     public UploadManager(PieceStorage storage, String peerId) {
-        this(storage, peerId, DEFAULT_THREAD_COUNT, DEFAULT_QUEUE_CAPACITY);
+        this(storage, peerId, DEFAULT_THREAD_COUNT, DEFAULT_QUEUE_CAPACITY, null);
+    }
+
+    public UploadManager(PieceStorage storage, String peerId, UploadListener listener) {
+        this(storage, peerId, DEFAULT_THREAD_COUNT, DEFAULT_QUEUE_CAPACITY, listener);
     }
 
     public UploadManager(PieceStorage storage, String peerId,
                          int threadCount, int queueCapacity) {
+        this(storage, peerId, threadCount, queueCapacity, null);
+    }
+
+    public UploadManager(PieceStorage storage, String peerId,
+                         int threadCount, int queueCapacity,
+                         UploadListener listener) {
         if (storage == null) {
             throw new IllegalArgumentException("PieceStorage must not be null");
         }
@@ -47,6 +58,7 @@ public class UploadManager {
         }
         this.storage = storage;
         this.peerId = peerId == null ? "peer-seeder" : peerId;
+        this.listener = listener != null ? listener : new UploadListener() {};
 
         AtomicInteger threadNumber = new AtomicInteger(1);
         ThreadFactory factory = runnable -> {
@@ -85,7 +97,7 @@ public class UploadManager {
         try {
             executor.execute(() -> {
                 try {
-                    new PeerUploadHandler(storage, peerId, socket).run();
+                    new PeerUploadHandler(storage, peerId, socket, listener).run();
                 } finally {
                     connections.remove(channel);
                     activeConnections.decrementAndGet();

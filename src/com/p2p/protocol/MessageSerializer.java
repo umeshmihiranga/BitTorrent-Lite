@@ -529,6 +529,88 @@ public class MessageSerializer {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  0x14  GET_METADATA  (Leecher → Seeder)
+    //  Payload: fileHash(UTF)
+    // ═══════════════════════════════════════════════════════════════
+
+    public static Message createGetMetadata(String fileHash) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeUTF(fileHash);
+        dos.flush();
+        return new Message(MessageType.GET_METADATA, baos.toByteArray());
+    }
+
+    public static String parseGetMetadata(byte[] payload) throws ProtocolException {
+        try {
+            return wrapPayload(payload).readUTF();
+        } catch (IOException e) {
+            throw new ProtocolException("Malformed GET_METADATA payload: " + e.getMessage(), e);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  0x15  METADATA_RESPONSE  (Seeder → Leecher)
+    //  Payload: fileName(UTF) + fileSize(long) + pieceSize(int)
+    //           + masterHash(UTF) + pieceCount(int) + [pieceHash(UTF)...]
+    // ═══════════════════════════════════════════════════════════════
+
+    public static Message createMetadataResponse(String fileName, long fileSize, int pieceSize,
+                                                 String masterHash, List<String> pieceHashes)
+            throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeUTF(fileName);
+        dos.writeLong(fileSize);
+        dos.writeInt(pieceSize);
+        dos.writeUTF(masterHash);
+        dos.writeInt(pieceHashes.size());
+        for (String h : pieceHashes) {
+            dos.writeUTF(h);
+        }
+        dos.flush();
+        return new Message(MessageType.METADATA_RESPONSE, baos.toByteArray());
+    }
+
+    public static class MetadataContent {
+        public final String fileName;
+        public final long fileSize;
+        public final int pieceSize;
+        public final String masterHash;
+        public final List<String> pieceHashes;
+
+        public MetadataContent(String fileName, long fileSize, int pieceSize,
+                               String masterHash, List<String> pieceHashes) {
+            this.fileName = fileName;
+            this.fileSize = fileSize;
+            this.pieceSize = pieceSize;
+            this.masterHash = masterHash;
+            this.pieceHashes = pieceHashes;
+        }
+    }
+
+    public static MetadataContent parseMetadataResponse(byte[] payload) throws ProtocolException {
+        try {
+            DataInputStream dis = wrapPayload(payload);
+            String fileName   = dis.readUTF();
+            long   fileSize   = dis.readLong();
+            int    pieceSize  = dis.readInt();
+            String masterHash = dis.readUTF();
+            int    count      = dis.readInt();
+            if (count < 0 || count > 100_000) {
+                throw new ProtocolException("Invalid piece count in METADATA_RESPONSE: " + count);
+            }
+            List<String> hashes = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                hashes.add(dis.readUTF());
+            }
+            return new MetadataContent(fileName, fileSize, pieceSize, masterHash, hashes);
+        } catch (IOException e) {
+            throw new ProtocolException("Malformed METADATA_RESPONSE payload: " + e.getMessage(), e);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     //  0xFF  ERROR
     //  Payload: errorCode(int) + errorMessage(UTF)
     // ═══════════════════════════════════════════════════════════════
