@@ -24,6 +24,7 @@ public class NetworkStatsPanel extends JPanel {
 
     private long totalFileBytes;
     private int totalPieces;
+    private int completedPieces;
     private long startTimeMs;
     private long lastTickMs;
     private boolean active;
@@ -61,6 +62,7 @@ public class NetworkStatsPanel extends JPanel {
 
     public void startSession(String stateText, int totalPieces, long totalFileBytes, int initialCompleted) {
         this.totalPieces = Math.max(0, totalPieces);
+        this.completedPieces = Math.max(0, Math.min(initialCompleted, this.totalPieces));
         this.totalFileBytes = Math.max(0, totalFileBytes);
         this.windowDownBytes.set(0);
         this.windowUpBytes.set(0);
@@ -99,8 +101,11 @@ public class NetworkStatsPanel extends JPanel {
     }
 
     public void updateProgress(int completed, int total) {
-        piecesLbl.setText(completed + " / " + total);
-        int pct = total > 0 ? (int) Math.round((completed * 100.0) / total) : 0;
+        int safeTotal = Math.max(0, total);
+        int safeCompleted = Math.max(0, Math.min(completed, safeTotal));
+        completedPieces = safeCompleted;
+        piecesLbl.setText(safeCompleted + " / " + safeTotal);
+        int pct = safeTotal > 0 ? (int) Math.round((safeCompleted * 100.0) / safeTotal) : 0;
         progressBar.setValue(pct);
         progressBar.setString(pct + "%");
     }
@@ -124,15 +129,19 @@ public class NetworkStatsPanel extends JPanel {
         elapsedLbl.setText(formatTime(elapsedSec));
 
         long downloaded = totalDownBytes.get();
-        if (totalFileBytes > 0 && downloaded > 0 && downloaded < totalFileBytes && elapsedSec > 0) {
-            double avgBytesPerSec = (double) downloaded / ((now - startTimeMs) / 1000.0);
+        if (totalPieces > 0 && completedPieces >= totalPieces) {
+            etaLbl.setText("00:00");
+        } else if (totalPieces > 0 && totalFileBytes > 0 && downloaded > 0 && elapsedSec > 0) {
+            double avgBytesPerSec = (double) downloaded / elapsedSec;
             if (avgBytesPerSec > 1.0) {
-                long remainingSec = (long) ((totalFileBytes - downloaded) / avgBytesPerSec);
+                long remainingBytes = Math.round(totalFileBytes
+                        * (totalPieces - completedPieces) / (double) totalPieces);
+                long remainingSec = (long) (remainingBytes / avgBytesPerSec);
                 etaLbl.setText(formatTime(remainingSec));
                 return;
             }
         }
-        etaLbl.setText(downloaded >= totalFileBytes && totalFileBytes > 0 ? "00:00" : "--:--");
+        etaLbl.setText("--:--");
     }
 
     private static String formatTime(long totalSeconds) {
