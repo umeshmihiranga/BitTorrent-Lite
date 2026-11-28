@@ -448,7 +448,14 @@ public class MainGuiWindow extends JFrame {
 
             @Override
             public void onPeerStatus(String peerAddress, String status, BitSet bitfield) {
-                SwingUtilities.invokeLater(() -> peerTable.updatePeer(peerAddress, status, bitfield));
+                SwingUtilities.invokeLater(() -> {
+                    if ("DISCONNECTED".equalsIgnoreCase(status)
+                            || "FAILED".equalsIgnoreCase(status)) {
+                        peerTable.removePeer(peerAddress);
+                    } else {
+                        peerTable.updatePeer(peerAddress, status, bitfield);
+                    }
+                });
             }
 
             @Override
@@ -484,14 +491,18 @@ public class MainGuiWindow extends JFrame {
         return new UploadListener() {
             @Override
             public void onPeerConnected(String peerAddress, String remotePeerId) {
-                SwingUtilities.invokeLater(() ->
-                        peerTable.updatePeer(peerAddress + " (" + remotePeerId + ")", "UPLOADING", null));
+                SwingUtilities.invokeLater(() -> {
+                    peerTable.updatePeer(peerAddress, "LEECHING", null);
+                    appendLog("[SWARM] Leecher connected: " + remotePeerId + " at " + peerAddress);
+                });
             }
 
             @Override
             public void onPeerDisconnected(String peerAddress) {
-                SwingUtilities.invokeLater(() ->
-                        appendLog("[UPLOAD] Peer disconnected: " + peerAddress));
+                SwingUtilities.invokeLater(() -> {
+                    peerTable.removePeer(peerAddress);
+                    appendLog("[UPLOAD] Peer disconnected: " + peerAddress);
+                });
             }
 
             @Override
